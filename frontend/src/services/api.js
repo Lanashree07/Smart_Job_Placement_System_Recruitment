@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api',
-  timeout: 5000,
+  baseURL: 'https://smart-job-placement-system-recruitment.onrender.com/api',
+  timeout: 10000,
 });
 
 // Centralized error handler for all requests
