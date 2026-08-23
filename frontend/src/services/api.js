@@ -5,245 +5,173 @@ const api = axios.create({
   timeout: 5000,
 });
 
-// Mock Storage Helper
-const getStorage = (key, defaultVal) => {
-  const val = localStorage.getItem(key);
-  return val ? JSON.parse(val) : defaultVal;
-};
-const setStorage = (key, val) => {
-  localStorage.setItem(key, JSON.stringify(val));
+// Centralized error handler for all requests
+const handleError = (error) => {
+  if (error.response) {
+    console.error("API Error Response:", error.response.data);
+    throw error;
+  } else if (error.request) {
+    console.error("Network Error: Server is unavailable. Is Spring Boot running?");
+    throw new Error("Network Error: Server is unavailable. Please check if the backend is running.");
+  } else {
+    console.error("API Request Error:", error.message);
+    throw error;
+  }
 };
 
-// Seed initial jobs if none exist
-if (!localStorage.getItem('mock_jobs')) {
-  setStorage('mock_jobs', [
-    { id: 1, company: 'TechCorp', title: 'Software Engineer', location: 'New York', type: 'Full-time', salary: '$120,000', description: 'Great job', requirements: 'React, Node.js', deadline: '2026-10-01' },
-    { id: 2, company: 'InnovateX', title: 'Frontend Developer', location: 'Remote', type: 'Contract', salary: '$90,000', description: 'Remote work', requirements: 'Vue, CSS', deadline: '2026-09-15' },
-    { id: 3, company: 'DataSystems', title: 'Data Analyst', location: 'San Francisco', type: 'Full-time', salary: '$105,000', description: 'Analyze data', requirements: 'SQL, Python', deadline: '2026-11-20' },
-  ]);
-}
-if (!localStorage.getItem('mock_users')) {
-  setStorage('mock_users', [
-    { id: 0, name: 'Admin User', email: 'admin@smarthire.com', password: 'admin123', role: 'ADMIN' }
-  ]);
-} else {
-  // Ensure admin user exists
-  const users = getStorage('mock_users', []);
-  if (!users.find(u => u.role === 'ADMIN')) {
-    users.push({ id: 0, name: 'Admin User', email: 'admin@smarthire.com', password: 'admin123', role: 'ADMIN' });
-    setStorage('mock_users', users);
-  }
-}
-if (!localStorage.getItem('mock_applications')) {
-  setStorage('mock_applications', []);
-}
+api.interceptors.response.use((response) => response, handleError);
+
+// Transformers to match Spring Boot nested JSON to React flat UI requirements
+const formatStatus = (status) => {
+  if (!status) return status;
+  return status.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ');
+};
+
+const transformApplication = (app) => {
+  if (!app) return app;
+  return {
+    ...app,
+    candidateName: app.candidate?.fullName || 'Unknown',
+    candidateEmail: app.candidate?.email || 'Unknown',
+    jobTitle: app.job?.title || 'Unknown',
+    company: app.job?.company || 'Unknown',
+    status: formatStatus(app.status)
+  };
+};
+
+const transformPlacement = (place) => {
+  if (!place) return place;
+  return {
+    ...place,
+    candidateName: place.candidate?.fullName || 'Unknown',
+    candidateEmail: place.candidate?.email || 'Unknown',
+    jobTitle: place.job?.title || place.role || 'Unknown',
+    company: place.company || place.job?.company || 'Unknown',
+    placementStatus: formatStatus(place.status)
+  };
+};
+
+// Also Candidate has 'name' in React, but 'fullName' in Spring Boot
+const transformUser = (user) => {
+  if (!user) return user;
+  return {
+    ...user,
+    name: user.fullName || user.name
+  };
+};
 
 export const authAPI = {
   login: async (credentials) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const users = getStorage('mock_users', []);
-        const user = users.find(u => u.email === credentials.email && u.password === credentials.password);
-        if (user) {
-          resolve({ data: { token: 'mock-token-' + user.id, user } });
-        } else {
-          reject({ response: { data: { message: 'Invalid credentials' } } });
-        }
-      }, 500);
-    });
+    const res = await api.post('/auth/login', credentials);
+    if (res.data && res.data.user && res.data.user.role === 'ADMIN') {
+      throw new Error("Invalid credentials");
+    }
+    if (res.data && res.data.user) {
+      res.data.user = transformUser(res.data.user);
+    }
+    return res;
   },
   adminLogin: async (credentials) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const users = getStorage('mock_users', []);
-        const user = users.find(u => u.email === credentials.email && u.password === credentials.password && u.role === 'ADMIN');
-        if (user) {
-          resolve({ data: { token: 'mock-token-' + user.id, user } });
-        } else {
-          reject({ response: { data: { message: 'Invalid admin credentials' } } });
-        }
-      }, 500);
-    });
+    const res = await api.post('/auth/login', credentials);
+    if (res.data && res.data.user && res.data.user.role !== 'ADMIN') {
+      throw new Error("Invalid admin credentials");
+    }
+    if (res.data && res.data.user) {
+      res.data.user = transformUser(res.data.user);
+    }
+    return res;
   },
   register: async (userData) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const users = getStorage('mock_users', []);
-        if (users.find(u => u.email === userData.email)) {
-          reject({ response: { data: { message: 'Email already exists' } } });
-          return;
-        }
-        const newUser = { ...userData, id: Date.now(), role: 'CANDIDATE' };
-        users.push(newUser);
-        setStorage('mock_users', users);
-        resolve({ data: { message: 'Registration successful', user: newUser } });
-      }, 500);
-    });
+    // React form sends 'name', Spring Boot expects 'fullName'
+    const payload = { ...userData, fullName: userData.name || userData.fullName };
+    const res = await api.post('/auth/register', payload);
+    if (res.data) res.data = transformUser(res.data);
+    return res;
   },
   updateProfile: async (userId, updateData) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const users = getStorage('mock_users', []);
-        const index = users.findIndex(u => u.id === userId);
-        if (index > -1) {
-          users[index] = { ...users[index], ...updateData };
-          setStorage('mock_users', users);
-          resolve({ data: { user: users[index] } });
-        }
-      }, 500);
-    });
+    const res = await api.put(`/candidates/${userId}`, updateData);
+    if (res.data) res.data = transformUser(res.data);
+    return res;
   },
   getAllCandidates: async () => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const users = getStorage('mock_users', []);
-        resolve({ data: users.filter(u => u.role === 'CANDIDATE') });
-      }, 300);
-    });
+    const res = await api.get('/candidates');
+    // Ensure we only return CANDIDATE role
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.filter(u => u.role === 'CANDIDATE').map(transformUser);
+    }
+    return res;
   }
 };
 
 export const jobsAPI = {
   getAllJobs: async () => {
-    return new Promise(resolve => {
-      setTimeout(() => resolve({ data: getStorage('mock_jobs', []) }), 300);
-    });
+    return api.get('/jobs');
   },
   getJobById: async (id) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const jobs = getStorage('mock_jobs', []);
-        const job = jobs.find(j => j.id === parseInt(id));
-        resolve({ data: job });
-      }, 300);
-    });
+    return api.get(`/jobs/${id}`);
   },
   createJob: async (jobData) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const jobs = getStorage('mock_jobs', []);
-        const newJob = { ...jobData, id: Date.now() };
-        jobs.push(newJob);
-        setStorage('mock_jobs', jobs);
-        resolve({ data: newJob });
-      }, 500);
-    });
+    return api.post('/jobs', jobData);
   },
   updateJob: async (id, jobData) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const jobs = getStorage('mock_jobs', []);
-        const index = jobs.findIndex(j => j.id === parseInt(id));
-        if (index > -1) {
-          jobs[index] = { ...jobs[index], ...jobData };
-          setStorage('mock_jobs', jobs);
-          resolve({ data: jobs[index] });
-        }
-      }, 500);
-    });
+    return api.put(`/jobs/${id}`, jobData);
   },
   deleteJob: async (id) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const jobs = getStorage('mock_jobs', []);
-        const newJobs = jobs.filter(j => j.id !== parseInt(id));
-        setStorage('mock_jobs', newJobs);
-        resolve({ data: { message: 'Job deleted' } });
-      }, 500);
-    });
+    return api.delete(`/jobs/${id}`);
   }
 };
 
 export const applicationsAPI = {
   applyForJob: async (userId, jobId, jobDetails) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const apps = getStorage('mock_applications', []);
-        const users = getStorage('mock_users', []);
-        const user = users.find(u => u.id === userId) || {};
-        
-        if (apps.find(a => a.userId === userId && a.jobId === jobId)) {
-          reject({ response: { data: { message: 'Already applied' } } });
-          return;
-        }
-        const newApp = {
-          id: Date.now(),
-          userId,
-          candidateName: user.name || 'Unknown',
-          candidateEmail: user.email || 'Unknown',
-          jobId,
-          jobTitle: jobDetails.title,
-          company: jobDetails.company,
-          location: jobDetails.location,
-          appliedDate: new Date().toISOString(),
-          status: 'Applied',
-          placementStatus: 'Pending'
-        };
-        apps.push(newApp);
-        setStorage('mock_applications', apps);
-        resolve({ data: newApp });
-      }, 500);
-    });
+    const res = await api.post('/applications', { candidateId: userId, jobId });
+    if (res.data) res.data = transformApplication(res.data);
+    return res;
   },
   getCandidateApplications: async (userId) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const apps = getStorage('mock_applications', []);
-        resolve({ data: apps.filter(a => a.userId === userId) });
-      }, 300);
-    });
+    const res = await api.get(`/applications/candidate/${userId}`);
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map(transformApplication);
+    }
+    return res;
   },
   getCandidatePlacements: async (userId) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const apps = getStorage('mock_applications', []);
-        resolve({ data: apps.filter(a => a.userId === userId && a.status === 'Selected') });
-      }, 300);
-    });
+    const res = await api.get(`/placements/candidate/${userId}`);
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map(transformPlacement);
+    }
+    return res;
   },
   getAllApplications: async () => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ data: getStorage('mock_applications', []) });
-      }, 300);
-    });
+    const res = await api.get('/applications');
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map(transformApplication);
+    }
+    return res;
   },
   updateApplicationStatus: async (id, status) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const apps = getStorage('mock_applications', []);
-        const index = apps.findIndex(a => a.id === parseInt(id));
-        if (index > -1) {
-          apps[index] = { ...apps[index], status };
-          if (status === 'Selected' && !apps[index].placementStatus) {
-            apps[index].placementStatus = 'Selected'; // Initial placement status
-          }
-          setStorage('mock_applications', apps);
-          resolve({ data: apps[index] });
-        }
-      }, 500);
-    });
+    const enumStatus = status.toUpperCase().replace(' ', '_');
+    const res = await api.put(`/applications/${id}/status`, { status: enumStatus });
+    if (res.data) res.data = transformApplication(res.data);
+    return res;
   },
   getAllPlacements: async () => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const apps = getStorage('mock_applications', []);
-        resolve({ data: apps.filter(a => a.status === 'Selected') });
-      }, 300);
-    });
+    const res = await api.get('/placements');
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map(transformPlacement);
+    }
+    return res;
   },
   updatePlacementStatus: async (id, placementStatus) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const apps = getStorage('mock_applications', []);
-        const index = apps.findIndex(a => a.id === parseInt(id));
-        if (index > -1) {
-          apps[index] = { ...apps[index], placementStatus };
-          setStorage('mock_applications', apps);
-          resolve({ data: apps[index] });
-        }
-      }, 500);
-    });
+    const enumStatus = placementStatus.toUpperCase().replace(' ', '_');
+    const res = await api.put(`/placements/${id}/status`, { status: enumStatus });
+    if (res.data) res.data = transformPlacement(res.data);
+    return res;
+  }
+};
+
+export const adminAPI = {
+  getDashboardStats: async () => {
+    return api.get('/admin/dashboard');
   }
 };
 
