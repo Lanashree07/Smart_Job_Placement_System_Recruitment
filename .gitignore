@@ -1,0 +1,26 @@
+# Local Maven installation
+apache-maven-*/
+maven.zip
+
+# React
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+
+# Spring Boot / Maven
+spring-server/target/
+
+# H2 local database
+spring-server/data/
+spring-server/*.mv.db
+spring-server/*.trace.db
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
