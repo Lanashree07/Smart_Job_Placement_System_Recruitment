@@ -19,6 +19,7 @@ import Placements from './pages/Placements';
 
 // Admin Pages
 import AdminLogin from './pages/admin/AdminLogin';
+import AdminRegister from './pages/admin/AdminRegister';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminJobs from './pages/admin/AdminJobs';
 import AdminAddJob from './pages/admin/AdminAddJob';
@@ -31,8 +32,9 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Admin Login (No Layout) */}
+          {/* Admin Auth (No Layout) */}
           <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/register" element={<AdminRegister />} />
 
           {/* Admin Routes with Sidebar Layout */}
           <Route path="/admin" element={<AdminProtectedRoute><AdminLayout /></AdminProtectedRoute>}>

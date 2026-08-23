@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -64,7 +64,8 @@ const AdminLogin = () => {
           </button>
         </form>
         <p style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.85rem', color: 'var(--text-light)' }}>
-          Secure area. Authorized personnel only.
+          Secure area. Authorized personnel only. <br/><br/>
+          No admin account? <Link to="/admin/register" style={{ color: 'var(--primary-color)' }}>Register here</Link>
         </p>
       </div>
     </div>

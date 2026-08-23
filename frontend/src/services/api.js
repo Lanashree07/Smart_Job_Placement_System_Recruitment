@@ -88,6 +88,12 @@ export const authAPI = {
     if (res.data) res.data = transformUser(res.data);
     return res;
   },
+  adminRegister: async (userData) => {
+    const payload = { ...userData, fullName: userData.name || userData.fullName };
+    const res = await api.post('/auth/admin/register', payload);
+    if (res.data) res.data = transformUser(res.data);
+    return res;
+  },
   updateProfile: async (userId, updateData) => {
     const res = await api.put(`/candidates/${userId}`, updateData);
     if (res.data) res.data = transformUser(res.data);

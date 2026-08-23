@@ -29,4 +29,13 @@ public class AuthController {
             return ResponseEntity.status(409).body(Map.of("message", e.getMessage()));
         }
     }
+
+    @PostMapping("/admin/register")
+    public ResponseEntity<?> registerAdmin(@RequestBody Candidate c) {
+        try {
+            return ResponseEntity.ok(service.registerAdmin(c));
+        } catch(Exception e) {
+            return ResponseEntity.status(409).body(Map.of("message", e.getMessage()));
+        }
+    }
 }
